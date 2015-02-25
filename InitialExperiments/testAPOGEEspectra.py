@@ -71,12 +71,18 @@ plt.legend()
 # create array of all 256 spectra
 
 spectra = np.zeros((N_spec, N_wave))
+flags = np.zeros((N_spec))
 
 #mask = error < 10**-15.5 # != np.max(error) # mask out places with really big errors/flux=0
 #spectra = np.zeros((N_spec, np.sum(mask)))
 
 for index in range(N_spec):
     file = pyfits.open('APOGEE/'+filenames[index])
+    
+    # save bitwise or star flag for all visits to each star
+    flags[index] = file[0].header['STARFLAG']
+    
+    # save spectrum for this file to the large array    
     if file[0].header['NVISITS'] == 1:
         spectra[index,:] = file[1].data #* units
         #spectra[index,:] = file[1].data[mask]
@@ -85,6 +91,22 @@ for index in range(N_spec):
         #spectra[index,:] = file[1].data[0,mask]
     file.close()
     
+# remove spectra where starflag was nonzero for any visit; can refine later. Binary digits 0, 3, 4 == BAD
+spectra = spectra[flags == 0]
+print 'Number of spectra after removing those with flags set: ', np.shape(spectra)[0]
+
+# create mask of chip gaps using wavelengths given on the "using apogee spectra" webpage
+#chipgaps = (wavelength < 15140.) + ((wavelength > 15810.)*(wavelength < 15850.)) \
+#            + ((wavelength > 16440.)*(wavelength < 16470.)) + (wavelength > 16960.)
+
+# now pad the chip gaps by 10 angstroms on each side to make sure big changes in spectrum are removed
+chipgaps = (wavelength < 15170.) + ((wavelength > 15800.)*(wavelength < 15860.)) \
+            + ((wavelength > 16430.)*(wavelength < 16480.)) + (wavelength > 16950.)
+
+# remove the regions surrounding chip gaps/edges from the spectra and wavelength arrays 
+spectra = spectra[:,~chipgaps]
+wavelength = wavelength[~chipgaps]
+   
 # run naive PCA without masking anything just to see if it works
     
 pca = PCA(n_components=5)
