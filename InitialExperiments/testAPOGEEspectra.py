@@ -27,10 +27,14 @@ plt.ion()
 # read in metallicities from file from CAS aligned line by line with spectra filenames
 # check how many disk vs. halo stars we have; get rid of stars with no metallicity determination
 
-def readin(metname = 'metallicity.txt', specname = 'spec_filenames.txt', plot=True):
-    metallicities = np.genfromtxt(metname,delimiter=',',usecols=0)
+def readin(dataname = 'parameters.txt', specname = 'spec_filenames.txt', plot=True):
+    metallicities = np.genfromtxt(dataname,delimiter=',',usecols=0)
+    Teff = np.genfromtxt(dataname,delimiter=',',usecols=1)
+    logg = np.genfromtxt(dataname,delimiter=',',usecols=2)
     good_z = metallicities != -9999.
     metallicities = metallicities[good_z]
+    Teff = Teff[good_z]
+    logg = logg[good_z]
     
     condHalo = (metallicities > -2.5) * (metallicities < -1.1)
     condDisk = (metallicities > -0.9) * (metallicities < 0.6) 
@@ -97,9 +101,12 @@ def readin(metname = 'metallicity.txt', specname = 'spec_filenames.txt', plot=Tr
         
     # remove spectra where starflag was nonzero for any visit; can refine later. Binary digits 0, 3, 4 == BAD
     spectra = spectra[:, flags == 0, :]
+    metallicities = metallicities[flags == 0]
+    Teff = Teff[flags == 0]
+    logg = logg[flags == 0]
     print 'Number of spectra after removing those with flags set: ', np.shape(spectra)[1]
     
-    return wavelength, spectra
+    return wavelength, spectra, metallicities, Teff, logg
 
 def naivePCA(wavelength, spectra, mask=None, n_components=5, plot=True, figtitle=None):
 
@@ -135,7 +142,73 @@ def naivePCA(wavelength, spectra, mask=None, n_components=5, plot=True, figtitle
         plt.title(figtitle)
         plt.xlabel('PC')
         plt.ylabel('Variance')
+        
+        return pca.transform(spectra[0,:,:])
+
+def plotTransform(lowDim, metallicities, Teff, logg, zoom=False):            
+        # plot data transformed to space of first two PCs color coded by [Fe/H], Teff, and logg
+
+        transform = lowDim/10000.
+        
+        plt.figure(figsize=(15,8))
+        
+        plt.subplot(2,3,1)
+        plt.scatter(transform[:,0], transform[:,1], c=metallicities, s=30, lw=0)
+        plt.xlabel('PC1')
+        plt.ylabel('PC2')
+        plt.colorbar(label='[Fe/H]')
+        if zoom:
+            plt.xlim([-20,50])
+            plt.ylim([-1.5,0.5])
+
+        plt.subplot(2,3,2)
+        plt.scatter(transform[:,0], transform[:,1], c=Teff, s=30, lw=0)
+        plt.xlabel('PC1')
+        plt.ylabel('PC2')
+        plt.colorbar(label='Teff')
+        if zoom:
+            plt.xlim([-20,50])
+            plt.ylim([-1.5,0.5])
+        
+        plt.subplot(2,3,3)
+        plt.scatter(transform[:,0], transform[:,1], c=logg, s=30, lw=0)
+        plt.xlabel('PC1')
+        plt.ylabel('PC2')
+        plt.colorbar(label='log(g)')
+        if zoom:
+            plt.xlim([-20,50])
+            plt.ylim([-1.5,0.5])
+        
+        # PCs 2 and 3
+        
+        plt.subplot(2,3,4)
+        plt.scatter(transform[:,2], transform[:,1], c=metallicities, s=30, lw=0)
+        plt.xlabel('PC3')
+        plt.ylabel('PC2')
+        plt.colorbar(label='[Fe/H]')
+        if zoom:
+            plt.xlim([-1,1.5])
+            plt.ylim([-1.5,0.5])
+
+        plt.subplot(2,3,5)
+        plt.scatter(transform[:,2], transform[:,1], c=Teff, s=30, lw=0)
+        plt.xlabel('PC3')
+        plt.ylabel('PC2')
+        plt.colorbar(label='Teff')
+        if zoom:
+            plt.xlim([-1,1.5])
+            plt.ylim([-1.5,0.5])
             
+        plt.subplot(2,3,6)
+        plt.scatter(transform[:,2], transform[:,1], c=logg, s=30, lw=0)
+        plt.xlabel('PC3')
+        plt.ylabel('PC2')
+        plt.colorbar(label='log(g)')
+        if zoom:
+            plt.xlim([-1,1.5])
+            plt.ylim([-1.5,0.5])        
+        #plt.tight_layout()
+        
 
 def testMasks(wavelength, spectra):
     # identify common chip gaps and fill them in w/a value 
@@ -175,13 +248,17 @@ def testMasks(wavelength, spectra):
     
     naivePCA(wavelength, spectra, ~chipgaps, figtitle='Chip Gaps Masked')  
 
+# read in spectra and parameters
+wavelength, spectra, metallicities, Teff, logg = readin(plot=False)
 
 # apply PCA to raw data
-wavelength, spectra = readin(plot=False)
-naivePCA(wavelength, spectra, figtitle='No Mask')
+#transform = naivePCA(wavelength, spectra, figtitle='No Mask')
 
 # apply PCA to masked data
 mask = (spectra[1, :, :] == 1e10)
 finalmask = (np.sum(mask, axis=0) > spectra.shape[1]*.05)
+lowDim = naivePCA(wavelength, spectra, ~finalmask, figtitle='Bad Data Masked')
 
-naivePCA(wavelength, spectra, ~finalmask, figtitle='Bad Data Masked')
+# plot transformed data color coded by various parameters
+plotTransform(lowDim, metallicities, Teff, logg)
+plotTransform(lowDim, metallicities, Teff, logg, zoom=True)
