@@ -116,6 +116,8 @@ def naivePCA(wavelength, spectra, mask=None, n_components=5, plot=True, figtitle
         spectra = spectra[:, :, mask]
         wavelength = wavelength[mask]
 
+    spectra[0, :, :] -= np.mean(spectra[0, :, :], axis=1)[:, np.newaxis]
+
     pca.fit(spectra[0, :, :])
     print 'Variances of recovered PCs: ', pca.explained_variance_ratio_
 
